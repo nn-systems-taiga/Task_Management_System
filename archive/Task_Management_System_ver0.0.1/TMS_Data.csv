@@ -1,0 +1,1 @@
+type,id,parentId,title,description,periods,priority,status,createdAt,updatedAt,milestoneDate,milestoneShape,periodTimes,collapsed,ganttOnly,order,actualPeriods,actualPeriodTimes,effort,excludeFromWorkload

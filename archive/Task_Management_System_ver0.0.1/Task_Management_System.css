@@ -1,0 +1,491 @@
+﻿/*---------------------------------------------------------------------------------------------------------------------------------
+TMS_ver0.0「Task_Management_System：タスク管理システム」
+---------------------------------------------------------------------------------------------------------------------------------*/
+
+/*-------------------------------------------------------------------------------------------------------------------------------
+共通設定
+-------------------------------------------------------------------------------------------------------------------------------*/
+/* 全要素のボックスサイズをborder-box基準に統一する */
+* { box-sizing: border-box; }
+
+/* ページ自体（html/body）のスクロールを止め、内部の各エリアだけがスクロールするようにするための土台設定 */
+html { height: 100%; } /* bodyのheight:100%を効かせるためにhtmlにも高さを与える */
+
+/* :root内の変数定義：土日の色をヘッダー用と本体用の2種類に分離し、曜日テキスト用の色も追加する */
+:root {
+  --bg:#e6ebf2; --surface:#eef2f7; --shadow-dark:rgba(163,177,198,0.55); --shadow-light:rgba(255,255,255,0.85); /* 背景色・カード面色と、ニューモーフィズム風の立体表現に使う濃淡2種類の影色 */
+  --text-main:#3a4356; --text-sub:#7c8698; --accent:#5b7fdb; --danger:#e07a7a; /* 本文の主文字色・補助文字色、強調に使うアクセント色、削除・警告に使う危険色 */
+  --pri-high:#f28b82; --pri-mid:#f5c26b; --pri-low:#7fc99b; /* タスクの優先度「高・中・低」を色分けするための3色 */
+  --today-col:#dbe6ff; /* 「今日」の強調色はヘッダー・本体とも変更せず維持する */
+  --weekend-col-header: #f3f0fa; /* 土日の色はヘッダーの日付・曜日部分に残す薄紫色 */
+  --weekend-col-body: rgba(0,0,0,0.075); /* 本体（タスクバーが並ぶ行）側は無彩色のグレーにし、縞模様(0.035)より少し濃くして土日を見分けられるようにする */
+  --month-line:rgba(60,70,90,0.35); --year-line:rgba(30,40,60,0.65); /* ガントチャートで月の境目・年の境目を示す区切り線の色（年の境目のほうを濃くして区別する） */
+  --sat-text-col:#2f6fd6; /* 曜日ラベル行で土曜日の文字に使う青色 */
+  --sun-text-col:#e0574f; /* 曜日ラベル行で日曜日の文字に使う赤色 */
+}
+/* margin:0はそのまま維持しつつ、height:100%とoverflow:hiddenを追加した。これにより「ページ自体のスクロール」が発生しなくなり、内部の専用スクロール領域だけでスクロールが完結するようになる */
+body {
+  font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Meiryo",sans-serif; /* フォント指定を維持する */
+  background:var(--bg); /* 背景色を維持する */
+  margin:0; /* デフォルトの外側マージンを消す */
+  color:var(--text-main); /* 文字色を維持する */
+  height: 100%; /* ビューポート全体の高さを確保し、直下の.appがheight:100vhで正しく機能するようにする */
+  overflow: hidden; /* ページ全体（bodyレベル）のスクロールを禁止する */
+}
+/*-------------------------------------------------------------------------------------------------------------------------------
+共通設定
+-------------------------------------------------------------------------------------------------------------------------------*/
+
+
+/*-------------------------------------------------------------------------------------------------------------------------------
+共通レイアウト（アプリ全体の骨格：ヘッダー／タブ行／絞り込みエリア／表示パネルの土台）
+-------------------------------------------------------------------------------------------------------------------------------*/
+/* .appをflexboxの縦レイアウトに変更し、ビューポート高さ(100vh)に固定した。ページ自体はスクロールせず、内部の表示エリアだけが残り高さを使ってスクロールするようにする */
+.app {
+  max-width: 1800px; /* 中身が広がりすぎないよう最大幅を維持する */
+  width: 97%; /* 画面幅に対する比率を維持する */
+  margin: 0 auto; /* 左右中央寄せを維持する */
+  height: 100vh; /* ビューポート全体の高さぶんを確保する */
+  display: flex; /* ヘッダー・タブ行・表示エリアを縦に並べる */
+  flex-direction: column; /* 配置方向を縦にする */
+  padding: 16px 16px 12px; /* ページスクロールが無くなったため下側の大きな余白(旧60px)を減らした */
+  box-sizing: border-box; /* paddingを含めてheight:100vh内に収める */
+  overflow: hidden; /* .app自体はスクロールさせず、内部の各エリアだけにスクロールを閉じ込める */
+}
+/* .appがページ全体スクロールをやめて高さ固定(flexレイアウト)になったため、ヘッダーをposition:stickyで追従させる必要がなくなり、position/top/z-indexの指定を削除した。代わりにflex-shrink:0で高さを固定した */
+.app-header {
+  display: flex; /* タイトルとツールバーを縦に並べる */
+  flex-direction: column; /* 配置方向を維持する */
+  align-items: flex-start; /* 左揃えを維持する */
+  gap: 16px; /* 要素間の間隔を維持する */
+  margin-bottom: 16px; /* 下の要素との間隔を維持する */
+  flex-shrink: 0; /* .appのflexレイアウト内でヘッダーの高さが縮まないよう固定する */
+  background: var(--bg); /* 背景色を維持する */
+  padding: 12px 8px; /* 内側の余白を維持する */
+  box-shadow: 0 4px 10px rgba(0,0,0,0.06); /* 下との境界を分かりやすくする影を維持する */
+}
+.app-title { font-size:12px; margin:0;} /* 保存先表示テキスト(#fileStatus)の見た目。タイトルではなく補助情報のため小さめの文字サイズにし、外側マージンは付けない */
+.toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; justify-content:flex-start; } /* ヘッダー内のボタン群（ヘルプ/ファイル操作/各管理モーダルを開くボタン）を左詰めで横並びにする */
+
+/* 表示モード切替タブと絞り込み・並び替え・検索エリアを1つの行にまとめる共通コンテナ（絞り込みエリアが占有していた1行分の高さを表示エリアに還元するために新設した） */
+.toolbar-tabs-row {
+  display: flex; /* タブ群と絞り込みエリアを横並びにする */
+  align-items: center; /* 高さの異なる要素を縦方向中央で揃える */
+  justify-content: space-between; /* タブ群を左に、絞り込みエリアを右に配置する */
+  flex-wrap: wrap; /* 画面が狭い場合は折り返して2行になることを許容する */
+  gap: 12px; /* タブ群と絞り込みエリアの間隔 */
+  margin-bottom: 16px; /* 下の表示エリアとの間隔（従来のview-tabsのmargin-bottomをここに引き継ぐ） */
+  flex-shrink: 0; /* .appのflexレイアウト内でこの行の高さを固定する */
+}
+/* margin-bottomを親のtoolbar-tabs-rowに移したため削除し、幅が狭くなっても縮まないようflex-shrink:0を追加した */
+.view-tabs { display:flex; gap:8px; justify-content:flex-start; flex-shrink:0; }
+.tab-btn { border:none; border-radius:10px 10px 0 0; padding:10px 20px; background:var(--surface); color:var(--text-sub); cursor:pointer; box-shadow:3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light); } /* 非選択タブの見た目。上部だけ角丸にしてタブらしい形にし、浮き出た影(ニューモーフィズム)を付ける */
+.tab-btn.active { color:var(--accent); font-weight:bold; box-shadow:inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); } /* 選択中タブの見た目。影を内側(inset)にして「押し込まれた」状態を表現し、文字色・太字で選択状態を強調する */
+/* 絞り込み・検索エリアが専用の1行を占有していたのをやめ、タブ行の右側に配置するようにしたため、margin-bottomを削除し、paddingを詰めてタブ行と高さを揃え、残り幅を占有するようflexを追加した */
+.filter-section {
+  background: var(--surface); /* 背景色を維持する */
+  border-radius: 14px; /* 角丸を維持する */
+  padding: 8px 14px; /* タブ行と高さを揃えるため上下の余白を詰めた（旧14px→8px） */
+  box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light); /* 立体感の影を維持する */
+  flex: 1 1 auto; /* タブ群の右側に残ったスペースをできるだけ占有する */
+  min-width: 320px; /* 画面が狭い場合でも絞り込み項目が窮屈にならない最低幅を確保する */
+}
+
+/* リスト/ガント/業務余力の3つの表示エリアをまとめて囲み、常に画面の残り高さいっぱいまで広げるための新設コンテナ */
+.view-panels-wrapper {
+  flex: 1 1 auto; /* ヘッダー・タブ行を除いた残りの高さをすべて使い切る */
+  min-height: 0; /* 内容量に関わらず正しく縮小できるようにする */
+  display: flex; /* 表示中のビュー（1つだけ）が高さいっぱいに広がるようにする */
+  flex-direction: column; /* 縦方向のレイアウトにする */
+  overflow: hidden; /* このラッパー自体はスクロールさせない */
+}
+/* view-panelをflexboxの縦レイアウトに変更し、view-panels-wrapperの残り高さをすべて使い切るようにした。内部の見出し部分とスクロール部分を分離するための土台にする */
+.view-panel {
+  background: var(--surface); /* 背景色を維持する */
+  border-radius: 14px; /* 角丸を維持する */
+  padding: 16px; /* 内側の余白を維持する */
+  box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light); /* 立体感の影を維持する */
+  flex: 1 1 auto; /* view-panels-wrapperの残り高さをすべて使い切る */
+  min-height: 0; /* flexアイテムが内容量で高さ固定されてしまう既定挙動を解除し、正しく縮小できるようにする */
+  display: flex; /* 内部（ツールバー部分と実際にスクロールする部分）を縦に並べる */
+  flex-direction: column; /* 配置方向を縦にする */
+  overflow: hidden; /* view-panel自体はスクロールさせず、内部の専用スクロール領域だけにスクロールを閉じ込める */
+}
+/* display:flexを指定したことでhidden属性だけでは非表示にならなくなるため、hidden属性が付いている場合は明示的にdisplay:noneで上書きする */
+.view-panel[hidden] { display: none; }
+/*-------------------------------------------------------------------------------------------------------------------------------
+共通レイアウト（アプリ全体の骨格：ヘッダー／タブ行／絞り込みエリア／表示パネルの土台）
+-------------------------------------------------------------------------------------------------------------------------------*/
+
+
+/*-------------------------------------------------------------------------------------------------------------------------------
+共通UI部品（ボタン・絞り込みフォーム・ズームボタン・チェックボックスなど、複数エリアで使い回す部品）
+-------------------------------------------------------------------------------------------------------------------------------*/
+.btn { border:none; border-radius:12px; padding:10px 16px; font-size:14px; cursor:pointer; background:var(--surface); color:var(--text-main); box-shadow:6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light); transition:box-shadow .15s ease; } /* 通常ボタンの基本形。浮き出た影のニューモーフィズム表現とし、hover/activeでの影切替をなめらかにするtransitionを付ける */
+.btn:hover { box-shadow:3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light); } /* ホバー時は影をやや小さくし、浮きが弱まったように見せて反応を示す */
+.btn:active { box-shadow:inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); } /* クリック中は影を内側(inset)にして「押し込まれた」感触を出す */
+.btn-primary { background:linear-gradient(135deg,var(--accent),#7d5fdb); color:#fff; } /* 主要操作用ボタン。アクセント色から紫へのグラデーションで目立たせる */
+.btn-danger { background:var(--danger); color:#fff; } /* 削除など危険な操作用のボタン色 */
+.btn-small { padding:6px 10px; font-size:12px; } /* 一覧の行内など、狭い場所で使う小型ボタン用の余白・文字サイズ */
+.btn-outline { background:var(--surface); } /* 主張を抑えたいボタン（キャンセル・閉じるなど）用に、通常のカード面色のみを使う */
+
+/* メイン画面上部の絞り込み欄に加え、フォルダー/メインタスク/サブタスク/ディテールタスク/マイルストーンの各管理モーダルの絞り込み欄でも共通で使われる */
+.filter-row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:flex-start; }
+.filter-row select, .filter-row input { border:none; border-radius:8px; padding:8px 10px; background:var(--bg); box-shadow:inset 2px 2px 4px var(--shadow-dark), inset -2px -2px 4px var(--shadow-light); } /* 絞り込み欄内のselect/inputの見た目。凹んだ影(inset)にしてボタン類(浮き出し)と区別する */
+
+/* ガントチャートの日(時間)/週/月/四半期/年ボタンと、業務余力ビューの週/月/四半期/年/すべてボタン(.workload-zoom-btn)の両方で共通のベーススタイルとして使われる */
+.zoom-btn { border:none; border-radius:8px; padding:6px 12px; font-size:13px; background:var(--bg); color:var(--text-sub); cursor:pointer; box-shadow:2px 2px 4px var(--shadow-dark), -2px -2px 4px var(--shadow-light); }
+.zoom-btn.active { color:#fff; background:var(--accent); } /* 選択中のズームレベルのみアクセント色で塗りつぶし、現在の表示単位がひと目で分かるようにする */
+
+.checkbox-inline-label { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-sub); margin-bottom:10px; } /* チェックボックスとラベル文字を1行に並べて表示するための共通レイアウト */
+.checkbox-inline-label input[type="checkbox"] { width:auto; margin:0; flex-shrink:0; } /* モーダル内input共通スタイル(width:100%)の影響を受けないよう幅を自動に戻し、ラベル文字が伸びてもチェックボックス自体が縮まないようにする */
+/*-------------------------------------------------------------------------------------------------------------------------------
+共通UI部品（ボタン・絞り込みフォーム・ズームボタン・チェックボックスなど、複数エリアで使い回す部品）
+-------------------------------------------------------------------------------------------------------------------------------*/
+
+
+/*-------------------------------------------------------------------------------------------------------------------------------
+モーダル共通（オーバーレイ・フォーム部品・期間入力行・一覧モーダル・ヘルプモーダルなど、各種モーダルで共有する部品）
+-------------------------------------------------------------------------------------------------------------------------------*/
+.modal-overlay { position:fixed; inset:0; background:rgba(40,45,60,0.35); display:flex; align-items:center; justify-content:center; z-index:100; } /* 画面全体を覆う半透明の背景と、モーダル本体を中央に配置するためのflexコンテナ */
+.modal-overlay[hidden] { display:none; } /* hidden属性が付いている間はflexも解除して完全に非表示にする */
+.modal-box { background:var(--surface); border-radius:16px; padding:24px; width:92%; max-width:520px; max-height:88vh; overflow-y:auto; box-shadow:10px 10px 20px var(--shadow-dark), -10px -10px 20px var(--shadow-light); } /* モーダル本体の見た目。画面より大きくなりすぎないよう最大幅・最大高さを設け、収まらない分は内部で縦スクロールさせる */
+.modal-box label { display:block; margin-bottom:10px; font-size:13px; color:var(--text-sub); } /* モーダル内の各入力項目のラベル文字は補助色にし、項目ごとにブロック化して縦に並べる */
+.modal-box input[type="text"], .modal-box input[type="date"], .modal-box input[type="time"], .modal-box input[type="number"], .modal-box textarea, .modal-box select { width:100%; margin-top:4px; border:none; border-radius:8px; padding:8px 10px; background:var(--bg); box-shadow:inset 2px 2px 4px var(--shadow-dark), inset -2px -2px 4px var(--shadow-light); font-size:14px; color:var(--text-main); } /* モーダル内の入力欄共通スタイル。凹んだ影(inset)にして入力可能な窪みであることを示す */
+.form-row { display:flex; gap:12px; flex-wrap:wrap; } /* 複数の入力項目を横並びにするための行コンテナ（優先度とステータスなど） */
+.form-row label { flex:1; } /* 行内の各ラベルが均等に幅を分け合うようにする */
+.modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:16px; } /* モーダル下部のボタン群（キャンセル・保存など）を右揃えで並べる */
+.error-text { color:var(--danger); font-size:13px; } /* 入力エラーメッセージ用の危険色テキスト */
+.modal-desc { font-size:13px; color:var(--text-sub); } /* モーダル冒頭の補足説明文用の控えめな色・サイズ */
+.modal-box hr {
+  border:none; /* デフォルトの立体的な罫線表現を消す */
+  border-top:1px solid rgba(0,0,0,0.1); /* 代わりに薄いフラットな1本線だけを表示する */
+  margin:16px 0; /* 前後のブロックとの間隔を確保する */
+}
+
+/* ===== 計画期間・実績期間の入力ブロック（タスク追加・編集モーダル専用） ===== */
+.periods-block { margin-bottom:12px; } /* 計画期間ブロック・実績期間ブロックそれぞれの下に余白を確保する */
+.periods-header { display:flex; justify-content:space-between; align-items:center; font-size:13px; color:var(--text-sub); margin-bottom:6px; } /* 「計画期間」等の見出しラベルと「＋追加」ボタンを両端に配置する行 */
+
+/* 計画期間・実績期間の入力行が何件に増えても、モーダル全体がその分だけ縦に伸び続けないよう、行一覧部分だけを固定高さの内部スクロール領域にする */
+#periodsContainer, #actualPeriodsContainer {
+  max-height: 260px; /* 期間行一覧の最大高さ。数値はお好みで調整可能（狭めたい場合は200px程度、広げたい場合は320px程度が目安） */
+  overflow-y: auto; /* 最大高さを超えた分はこの領域内だけで縦スクロールし、モーダル自体のスクロールとは分離する */
+  padding-right: 6px; /* スクロールバーが期間行の内容（特に削除ボタン）に重ならないよう少し余白を設ける */
+}
+
+.period-row { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; padding:8px; border-radius:8px; background:var(--bg); box-shadow:inset 1px 1px 3px var(--shadow-dark), inset -1px -1px 3px var(--shadow-light); } /* 期間1件分のカード。凹んだ影を付けて周囲の入力欄群から独立したブロックであることを示す */
+.period-row-dates { display:flex; gap:8px; align-items:center; } /* 開始日・終了日の日付入力を横並びにする行 */
+
+/* 期間行が複数になっても「今どの期間を編集しているか」を見失わないようにするための番号バッジ（#1・#2…）のスタイル */
+.period-row-index {
+  font-size: 11px; /* 日付欄の文字より小さくし、あくまで補助情報であることを示す */
+  color: var(--text-sub); /* 目立たせすぎないよう控えめな色にする */
+  background: var(--surface); /* 背景色を付けて周囲の日付欄と視覚的に区別する */
+  border-radius: 6px; /* 角丸にしてバッジらしい見た目にする */
+  padding: 2px 6px; /* バッジ内側の余白 */
+  flex-shrink: 0; /* 日付欄が伸びても番号バッジの幅が縮まないようにする */
+  white-space: nowrap; /* 番号が折り返されないようにする */
+}
+.period-row-dates input[type="date"] { flex:1; margin-top:0; } /* 開始日・終了日の入力欄が横幅を均等に分け合うようにし、上部マージンは行内では不要なので打ち消す */
+.period-row-time { display:flex; gap:8px; align-items:center; font-size:12px; color:var(--text-sub); transition:opacity .15s ease; } /* 単日指定時のみ使う時間入力行。無効時のopacity変化をなめらかにする */
+.period-row-time.is-disabled { opacity:.4; pointer-events:none; } /* 単日でない期間では時間指定が無意味なため、薄く表示しつつ操作も無効化する */
+.period-row-time input[type="time"] { flex:1; margin-top:0; } /* 開始時刻・終了時刻の入力欄が横幅を均等に分け合うようにする */
+.period-time-toggle { display:flex; align-items:center; gap:4px; margin:0; white-space:nowrap; } /* 「時間を指定する」チェックボックスとラベル文字を1行にまとめる */
+
+/* 実績期間ブロック（未記入=未実施を許容するため、計画期間と見た目を少し変えて識別しやすくしている） */
+.actual-periods-block { margin-top: 4px; } /* 直前の計画期間ブロックとの間隔を確保する */
+.actual-periods-desc { font-size:12px; color:var(--text-sub); margin:2px 0 8px; } /* 「未記入=完了時に計画期間をコピーする」旨を説明する補足文の見た目 */
+.actual-periods-block .period-row { background: rgba(91,127,219,0.08); } /* 実績期間の各行にはうっすらとアクセント色を敷き、計画期間の行と一目で区別できるようにする */
+
+/* ===== 各種管理モーダル（一覧）共通：フォルダー/メインタスク/サブタスク/ディテールタスク/マイルストーン ===== */
+.milestone-list { margin-bottom:12px; max-height:160px; overflow-y:auto; } /* 各種一覧の表示エリア。件数が増えても一定の高さで収まるよう内部スクロールにする */
+.milestone-item { display:flex; align-items:center; gap:8px; padding:6px 4px; border-bottom:1px solid rgba(0,0,0,0.06); font-size:13px; } /* 一覧内の1件分の行。行同士を薄い罫線で区切る */
+.milestone-item .m-shape { font-size:16px; } /* マイルストーンの形状アイコン（◆★●）を少し大きめに表示する */
+.milestone-item .m-label { flex:1; } /* ラベル部分が残りの横幅を占有するようにし、右側のボタン類を右端に押しやる */
+.file-actions { display:flex; flex-wrap:wrap; gap:10px; margin:14px 0; } /* 「＋追加」ボタンやファイル操作ボタン群を並べる行 */
+.file-import-label { display:inline-flex; align-items:center; cursor:pointer; } /* ファイル選択inputをラップし、ボタン風の見た目でクリック可能にするためのlabel */
+
+.list-modal-box { max-width:720px; display:flex; flex-direction:column; height:82vh; max-height:82vh; overflow:hidden; } /* 一覧系モーダルは通常のモーダルより横幅を広くし、高さを画面比率で固定して内部に見出し固定のスクロール領域を持たせる */
+.list-modal-box .milestone-list { flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto; } /* 一覧部分がモーダル内の残り高さいっぱいまで広がるようにし、通常のmax-height指定を打ち消す */
+.list-modal-box h2, .list-modal-box .modal-desc, .list-modal-box .filter-row, .list-modal-box .file-actions, .list-modal-box .modal-actions { flex-shrink:0; } /* 見出し・説明文・絞り込み欄・操作ボタン群は縮まないよう固定し、一覧部分だけが伸縮する */
+.list-modal-box .filter-row { margin-bottom:10px; } /* 絞り込み欄と直下の一覧との間隔を確保する */
+
+/* ===== ヘルプモーダル（機能説明） ===== */
+.help-modal-box { max-width:640px; } /* ヘルプ本文が読みやすいよう、通常モーダルよりやや広い幅にする */
+.help-content { margin-bottom:8px; } /* 各help-sectionをまとめる領域と下部の閉じるボタンとの間隔を確保する */
+.help-section { margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid rgba(0,0,0,0.08); } /* 機能テーマごとのまとまりを、下線と余白で区切って見やすくする */
+.help-section:last-child { margin-bottom:0; border-bottom:none; } /* 最後のセクションには余分な余白・区切り線を付けない */
+.help-section h3 { margin:0 0 8px; font-size:14px; color:var(--accent); } /* 各セクションの大見出しはアクセント色にして目立たせる */
+/* チップ風の背景・角丸・三角マークをやめ、h3と同じアクセントカラーの文字色のみで見出しを表現するシンプルな形にした。本文(13px)とのサイズ差も最小限にし、急な文字変化による読みづらさを避ける */
+.help-section h4 {
+  margin: 14px 0 4px; /* 前の段落との間隔をやや広めに、直後の本文との間隔は詰める */
+  font-size: 13px; /* 本文と同じサイズにし、太字と色だけで見出しであることを示す（サイズ差による急な変化を無くす） */
+  font-weight: 700; /* 太字にして本文と区別する */
+  color: var(--accent); /* h3と同じアクセントカラーに揃え、見出し同士の色に一貫性を持たせる */
+}
+/* 見出しの先頭に「・」を付けて視覚的な目印にする（背景やインデントは付けない） */
+.help-section h4::before {
+  content: '・'; /* 見出し文字列の直前に「・」を1文字追加する */
+}
+/* 各help-section内で最初に来るh4はh3の直後に来るため、余分な上マージンを詰める（変更前と同じ役割を維持） */
+.help-section h4:first-of-type { margin-top: 0; }
+/* 1つのhelp-section内に複数のp(段落)が並ぶようになったため、段落間の間隔を確保するmargin-bottomを追加した */
+.help-section p { margin:0 0 8px; font-size:13px; color:var(--text-main); line-height:1.7; }
+/* section内最後の段落は下の区切り線(border-bottom)との間隔をこれ以上広げたくないため、余分な下マージンを削除する */
+.help-section p:last-child { margin-bottom:0; }
+/*-------------------------------------------------------------------------------------------------------------------------------
+モーダル共通（オーバーレイ・フォーム部品・期間入力行・一覧モーダル・ヘルプモーダルなど、各種モーダルで共有する部品）
+-------------------------------------------------------------------------------------------------------------------------------*/
+
+
+/*-------------------------------------------------------------------------------------------------------------------------------
+リスト表示（※.task-tableと.list-scroll-areaは業務余力ビュー下部のタスク一覧(workloadListBody)とも共有）
+-------------------------------------------------------------------------------------------------------------------------------*/
+.task-table { width:100%; border-collapse:collapse; } /* 表全体の幅をエリアいっぱいに広げ、セル間の二重線を1本にまとめる */
+.task-table th, .task-table td { padding:10px 8px; text-align:left; border-bottom:2px solid rgba(30,40,60,0.18); font-size:14px; } /* 見出しセル・データセル共通の余白・左揃え・行区切り線 */
+/* リスト表示の見出し行を、ガントチャートの日付見出しと同様にスクロール時も上部に固定表示させる */
+.task-table thead th {
+  position: sticky; /* スクロールしても見出し行が流れていかないように固定する */
+  top: 0; /* 親のスクロール領域(.list-scroll-area)の最上部に固定する */
+  background: var(--surface); /* 下の行が透けて重ならないよう不透明の背景を敷く */
+  z-index: 2; /* タスク行より手前に表示する */
+}
+.task-table tbody tr:nth-child(even) { background: rgba(91,127,219,0.05); } /* 1行おきにごく薄いアクセント色を敷き、行の境目を見分けやすくする縞模様(ゼブラストライプ) */
+/* リスト表示で計画期間・実績期間、業務余力一覧で計画期間を表示する列に付与される（renderList / renderWorkloadListの両方で使用） */
+.task-table td.col-period { white-space: nowrap; }
+
+/* リスト表示・業務余力タスク一覧で、見出し行は固定したまま本体だけを内部スクロールさせるための共通スクロール領域 */
+.list-scroll-area {
+  flex: 1 1 auto; /* 見出しなどを除いた残りの高さをすべて使い切る */
+  min-height: 0; /* 内容量に関わらず正しく縮小できるようにする */
+  overflow-y: auto; /* このエリア内だけで縦スクロールさせる（ページ全体のスクロールとは分離する） */
+}
+
+.empty-message { text-align:center; color:var(--text-sub); padding:20px; } /* 「タスクはまだありません」等、一覧が空のときのメッセージの見た目 */
+.row-kind-badge { font-size:11px; color:var(--text-sub); } /* 一覧行で「サブタスク」「ディテールタスク」等の種別を示す小さなラベル文字 */
+.row-title { font-size:14px; color:var(--text-main); margin-bottom:2px; } /* 一覧行のタスク名本体の文字。所属パス(row-path)より少し大きく主文字色で目立たせる */
+.row-path { font-size:11px; color:var(--text-sub); } /* タスク名の下に添える所属パス（フォルダー/メインタスク名など）の小さな補助文字 */
+/*-------------------------------------------------------------------------------------------------------------------------------
+リスト表示（※.task-tableと.list-scroll-areaは業務余力ビュー下部のタスク一覧(workloadListBody)とも共有）
+-------------------------------------------------------------------------------------------------------------------------------*/
+
+
+/*-------------------------------------------------------------------------------------------------------------------------------
+ガントチャート（ツールバー・日付グリッド・タスクバー・行ドラッグ&ドロップ・専用ツールチップを含む）
+-------------------------------------------------------------------------------------------------------------------------------*/
+/* ガントセクション内でツールバー部分の高さが縮まないようflex-shrink:0を追加した（.gantt-sectionが.view-panelのflex縦レイアウトになったため） */
+.gantt-toolbar { display:flex; flex-wrap:wrap; justify-content:flex-start; align-items:center; gap:16px; margin-bottom:12px; flex-shrink:0; }
+.gantt-zoom-group, .gantt-nav-group, .gantt-legend { display:flex; gap:6px; align-items:center; } /* ズームボタン群・移動ボタン群・凡例をそれぞれ横並びの小グループにまとめる */
+.legend-item { font-size:12px; color:var(--text-sub); display:flex; align-items:center; gap:4px; } /* 凡例1項目分（色付きドット＋ラベル文字）の並び */
+.legend-dot { display:inline-block; width:10px; height:10px; border-radius:50%; } /* 凡例の色見本を丸いドットとして表示する */
+.dot-高 { background:var(--pri-high); } /* 凡例ドットを優先度「高」の色にする */
+.dot-中 { background:var(--pri-mid); } /* 凡例ドットを優先度「中」の色にする */
+.dot-低 { background:var(--pri-low); } /* 凡例ドットを優先度「低」の色にする */
+.linked-shift-toggle { display:flex; align-items:center; gap:4px; font-size:12px; color:var(--text-sub); margin-left:4px; } /* 「全期間を連動して移動」「すべて折りたたむ」チェックボックスとラベルの並び */
+
+/* max-height:70vhによる固定値をやめ、flex:1で親(.gantt-section)の残り高さいっぱいまで広がるようにした。これにより「ページ全体のスクロール」と「ガント内部のスクロール」が二重に発生していた問題を解消し、スクロールはこの要素だけで完結するようにした */
+.gantt-wrapper {
+  display: flex; /* ラベルペインとスクロールペインを横に並べる */
+  align-items: stretch; /* 変更点：flex-startだと子要素の高さが中身依存になり縦スクロールが成立しないため、stretchにして両ペインの高さをwrapperに揃える */
+  overflow: hidden; /* 変更点：縦スクロールはこのラッパーではなく内側の.gantt-scroll-paneが担当するため、ここでは何も出さない */
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: 10px;
+}
+.gantt-label-pane {
+  flex-shrink: 0; /* 横方向に縮まないよう固定する */
+  width: 200px; /* JS側の定数(GANTT_LABEL_WIDTH_PX)と一致させるタスク名列の幅 */
+  background: var(--surface); /* 日付グリッド側と同じカード面色にし、境界の存在感は右側の罫線だけに任せる */
+  border-right: 2px solid rgba(0,0,0,0.12); /* タスク名列と日付グリッドの境目を明確にする縦線 */
+  overflow-y: hidden; /* 追加：見た目上は縦にはみ出す中身を隠す。実際の縦位置合わせはJSでscrollTopを同期させて行う */
+  scrollbar-width: none; /* 追加：Firefoxでラベルペイン側に二重のスクロールバーが出ないようにする */
+}
+.gantt-label-pane::-webkit-scrollbar { display: none; } /* 追加：Chrome/Safari等でラベルペイン側の見た目上のスクロールバーを消す（実スクロールはJS同期で行うため不要） */
+.gantt-scroll-pane {
+  flex: 1 1 auto; /* 残りの横幅をすべて使う */
+  overflow: auto; /* 変更点：横だけでなく縦もこのペイン自身が担当するスクロールコンテナにする。これによりsticky指定が正しくこの要素基準で機能するようになる */
+  min-width: 0; /* flexアイテムが正しく縮小できるようにする */
+  min-height: 0; /* 追加：flexアイテムとして正しく縮小し、overflow:autoが効くようにする */
+}
+
+.gantt-grid { display:grid; position:relative; } /* 日付ヘッダーと各行をグリッドレイアウトで積み上げ、マイルストーン等の絶対配置要素の基準にするためrelativeにする */
+
+/* ラベルペイン内でも縦スクロール時にこの見出しだけ上部固定させたいため、top方向のstickyのみ維持する。left方向は元々不要なので削除した */
+.gantt-head-label { position: sticky; top:0; background:var(--surface); padding:6px 8px; font-size:12px; border-right:2px solid rgba(0,0,0,0.12); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; z-index:6; display:flex; align-items:center; gap:4px; }
+
+/* ラベルペイン自体が横スクロールの外にあるため、position:sticky（left方向）もz-index重ね順もwill-changeも不要になった。高さは行ごとにJSがインラインで指定する */
+.gantt-row-label { position:static; background:var(--surface); padding:6px 8px; font-size:12px; border-right:2px solid rgba(0,0,0,0.12); border-bottom:2px solid rgba(30,40,60,0.35); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:4px; }
+
+.gantt-row-label .row-name { overflow:hidden; text-overflow:ellipsis; } /* 行ラベル内のタスク名部分だけを対象に、幅を超えた分を「…」で省略する */
+.toggle-icon-btn { border:none; background:transparent; cursor:pointer; font-size:11px; color:var(--text-sub); padding:0 2px; flex-shrink:0; } /* フォルダー/メインタスク/サブタスク行頭の折りたたみ▶▼ボタン。背景・枠を消してアイコンだけを見せる */
+
+.gantt-head-month { display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--text-sub); border-bottom:1px solid rgba(0,0,0,0.08); border-right:1px solid rgba(0,0,0,0.08); position:sticky; top:0; z-index:5; background:var(--surface); } /* 日付ヘッダー1段目（月ラベル）。スクロールしても上部に固定表示する */
+
+.gantt-head-cell { display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--text-sub); border-bottom:1px solid rgba(0,0,0,0.08); border-right:1px solid rgba(0,0,0,0.12); position:sticky; top:0; z-index:5; background:var(--surface); } /* 日付ヘッダー2段目（日番号ラベル）。月ラベルと同じく上部固定にする */
+
+.gantt-head-weekday-cell { display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--text-sub); border-bottom:2px solid rgba(0,0,0,0.15); border-right:1px solid rgba(0,0,0,0.12); position:sticky; top:0; z-index:5; background:var(--surface); } /* 日付ヘッダー3段目（曜日ラベル）。下端の罫線を太くして日付グリッド本体との境目を分かりやすくする */
+.gantt-head-weekday-cell.sat-text { color:var(--sat-text-col); } /* 曜日ラベルのうち土曜日だけ青文字にする */
+.gantt-head-weekday-cell.sun-text { color:var(--sun-text-col); } /* 曜日ラベルのうち日曜日だけ赤文字にする */
+
+.gantt-head-cell.weekend, .gantt-head-weekday-cell.weekend { background: var(--weekend-col-header); } /* 日番号・曜日のヘッダーセルのうち土日に該当する列に薄紫色の背景を敷く */
+
+.gantt-head-cell.today-col, .gantt-head-weekday-cell.today-col { background:var(--today-col); font-weight:bold; } /* 「今日」に該当する列のヘッダーセルを強調色で塗り、太字にする */
+.gantt-head-cell.month-end, .gantt-head-month.month-end, .gantt-head-weekday-cell.month-end { border-right:2px solid var(--month-line); } /* 月が変わる境目の列の右側にやや太い区切り線を引く */
+.gantt-head-cell.year-end, .gantt-head-month.year-end, .gantt-head-weekday-cell.year-end { border-right:3px solid var(--year-line); } /* 年が変わる境目の列の右側に、月の境目よりさらに太い区切り線を引く */
+
+.gantt-day-cell { border-right:1px solid rgba(0,0,0,0.12); border-bottom:2px solid rgba(30,40,60,0.35); min-height:28px; } /* 日付グリッド本体の1セル。行同士の境目は太めの実線にする */
+
+.gantt-day-cell.weekend { background: var(--weekend-col-body); } /* 本体側の土日セルはヘッダーとは別の無彩色グレーで塗り、縞模様より少し濃くして見分けられるようにする */
+
+.gantt-day-cell.today-col { background:var(--today-col); } /* 「今日」に該当する列の本体セルをヘッダーと同じ強調色で塗る */
+.gantt-day-cell.month-end { border-right:2px solid var(--month-line); } /* 月が変わる境目のセルの右側にやや太い区切り線を引く */
+.gantt-day-cell.year-end { border-right:3px solid var(--year-line); } /* 年が変わる境目のセルの右側に、月の境目よりさらに太い区切り線を引く */
+.gantt-bar { border-radius:6px; font-size:11px; color:#fff; display:flex; align-items:center; padding:0 6px; white-space:nowrap; overflow:hidden; margin:3px 0; height:22px; border:1px solid rgba(0,0,0,0.18); } /* タスクの計画・実績バー共通の基本形。文字は白抜きにし、はみ出したタイトルは省略する */
+.gantt-bar.detail-bar { opacity:.9; border-style:dashed; } /* ディテールタスクのバーはサブタスクよりわずかに薄くし、枠線を破線にして種別を見分けられるようにする */
+.gantt-bar.pri-高 { background:var(--pri-high); } /* 優先度「高」のバー色 */
+.gantt-bar.pri-中 { background:var(--pri-mid); } /* 優先度「中」のバー色 */
+.gantt-bar.pri-低 { background:var(--pri-low); } /* 優先度「低」のバー色 */
+.gantt-bar.done { opacity:.5; text-decoration:line-through; } /* 完了済みタスクのバーは薄くし、タイトルに打ち消し線を入れて一目で完了と分かるようにする */
+.gantt-out-of-range { font-size:11px; color:var(--text-sub); padding:4px 8px; } /* 表示期間の外にタスクがあることを示す案内テキストの見た目 */
+.gantt-overall-row { position:relative; height:44px; } /* メインタスクの全体行（マイルストーンを載せる行）。マーカーを絶対配置するためrelativeにする */
+.gantt-overall-line { position:absolute; top:50%; left:0; right:0; height:2px; background:var(--text-sub); opacity:.4; } /* 全体行の中央に引く横方向のガイド線 */
+.milestone-marker { position:absolute; top:50%; transform:translate(-50%,-50%); font-size:16px; line-height:1; text-align:center; } /* マイルストーンの記号（◆★●）を該当日の位置に中央揃えで配置する */
+.milestone-marker .m-label-text { position:absolute; left:50%; transform:translateX(-50%); font-size:10px; white-space:nowrap; background:var(--surface); padding:1px 4px; border-radius:4px; box-shadow:1px 1px 3px var(--shadow-dark); } /* マイルストーン記号に添えるラベル文字。背景を敷いて下の日付グリッドの線と重なっても読めるようにする */
+.milestone-marker.label-top .m-label-text { bottom:18px; } /* ラベルを記号の上側に配置するバリエーション（重なり回避用） */
+.milestone-marker.label-bottom .m-label-text { top:18px; } /* ラベルを記号の下側に配置するバリエーション（重なり回避用） */
+
+/* ドラッグ中のツールチップ／備考のツールチップ（現状はガントチャート上の行ドラッグ・タスクバーの備考表示専用） */
+.drag-tooltip { position:fixed; z-index:200; background:#2b3242; color:#fff; padding:4px 8px; border-radius:6px; font-size:12px; pointer-events:none; white-space:nowrap; }
+body.dragging-gantt { user-select:none; } /* ガント行のドラッグ中はテキスト選択が発生してしまわないよう無効化する */
+body.dragging-gantt .gantt-bar { cursor:grabbing !important; } /* ドラッグ中はタスクバー上のカーソルを「掴んでいる」形に統一する */
+
+.desc-tooltip {
+  position:fixed; /* スクロール量に関わらず画面上の絶対位置に表示するため固定配置にする */
+  z-index:210; /* ドラッグ用ツールチップ(drag-tooltip)よりさらに手前に表示する */
+  background:#2b3242; /* 濃い背景色にして白文字を読みやすくする */
+  color:#fff; /* 濃い背景に合わせた白文字色 */
+  padding:6px 10px; /* 吹き出し内側の余白 */
+  border-radius:6px; /* 角丸にして吹き出しらしい見た目にする */
+  font-size:12px; /* 補助情報として控えめな文字サイズにする */
+  max-width:260px; /* 長い備考でも横に広がりすぎないよう最大幅を制限する */
+  white-space:pre-wrap; /* 備考内の改行をそのまま反映しつつ、幅を超えた分は折り返す */
+  line-height:1.5; /* 複数行になっても読みやすい行間を確保する */
+  pointer-events:none; /* ツールチップ自体はマウス操作を奪わないようにする */
+  box-shadow:3px 3px 8px rgba(0,0,0,0.35); /* 背後の要素から浮いて見えるよう影を付ける */
+}
+.gantt-bar:focus-visible {
+  outline:2px solid var(--accent); /* キーボード操作でタスクバーにフォーカスした際、アクセント色の枠で選択位置を示す */
+  outline-offset:1px; /* 枠線をバー本体から少し離し、視認性を上げる */
+}
+.gantt-row-label:focus, .gantt-row-label:focus-visible {
+  outline:none; /* 行ラベルはドラッグ操作のフォーカスが移りやすく、既定の青い枠が頻繁に出て煩わしいため非表示にする */
+}
+
+.row-ganttonly-tag { font-size:9px; color:#fff; background:var(--accent); border-radius:50%; width:14px; height:14px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; margin-left:2px; } /* 「ガントチャートのみに表示する」タスクの行ラベルに付く小さな丸型「G」マーク */
+
+.gantt-row-label { cursor: grab; } /* 行ラベル部分にドラッグ可能であることを示す「掴める」カーソルを表示する */
+.gantt-row-label.dragging-row { opacity: .4; cursor: grabbing; } /* ドラッグ中の行自体は半透明にし、元の位置に残っていることが分かるようにする */
+.gantt-row-label.drop-before { box-shadow: inset 0 2px 0 var(--accent); } /* ドロップ先の行の直前に挿入されることを示す、上端のアクセント色の線 */
+.gantt-row-label.drop-after { box-shadow: inset 0 -2px 0 var(--accent); } /* ドロップ先の行の直後に挿入されることを示す、下端のアクセント色の線 */
+.gantt-row-label.drop-into { background: rgba(91,127,219,0.25); outline: 2px dashed var(--accent); outline-offset: -2px; } /* ドロップ先の行の中（子として）へ移動することを示す、背景着色と破線の枠 */
+
+.gantt-row-label.is-closed-row .row-name { text-decoration: line-through; opacity: .55; } /* クローズ済みのフォルダー・メインタスク行のタスク名に打ち消し線を入れ、薄く表示する */
+.row-closed-tag { font-size: 11px; margin-left: 4px; } /* クローズ済み行のタスク名に添える鍵アイコン（🔒）用の余白・サイズ */
+
+.gantt-task-lane { position:relative; height:48px; } /* サブタスク/ディテールタスク1行分のレーン。上段(計画)・下段(実績)バーを重ねて配置するためrelativeにする */
+.gantt-task-lane::after { content:''; position:absolute; left:0; right:0; top:50%; height:0; border-top:1px dashed rgba(0,0,0,0.3); } /* レーンの中央に、計画バーと実績バーの境目を示す点線を引く */
+
+.gantt-bar.track-actual { opacity:.85; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.3); } /* 実績バーは計画バーよりわずかに薄くし、内側にうっすら枠線を足して下段であることを示す */
+.gantt-bar.track-actual::before { content:'✓ '; } /* 実績バーの先頭にチェックマークを付け、計画バーと文字面でも区別できるようにする */
+
+.gantt-row-alt { background: rgba(0,0,0,0.035); } /* 日付グリッド側の1行おきの縞模様（ゼブラストライプ）用の薄いグレー */
+.gantt-row-label.gantt-row-alt { background: #e0e3e8; } /* ラベルペイン側の縞模様。日付グリッド側と対応する行だけ背景をわずかに濃くする */
+/*-------------------------------------------------------------------------------------------------------------------------------
+ガントチャート（ツールバー・日付グリッド・タスクバー・行ドラッグ&ドロップ・専用ツールチップを含む）
+-------------------------------------------------------------------------------------------------------------------------------*/
+
+
+/*-------------------------------------------------------------------------------------------------------------------------------
+業務余力（ツールバー・積み上げ棒グラフ・Y軸・閾値ライン・下部一覧を含む）
+-------------------------------------------------------------------------------------------------------------------------------*/
+/* 業務余力セクション内でツールバー部分の高さが縮まないようflex-shrink:0を追加した（.workload-sectionが.view-panelのflex縦レイアウトになったため） */
+.workload-toolbar { display:flex; flex-wrap:wrap; justify-content:flex-start; align-items:center; gap:16px; margin-bottom:12px; flex-shrink:0; }
+.workload-mode-group, .workload-zoom-group, .workload-nav-group { display:flex; gap:6px; align-items:center; } /* 集計モードボタン・ズームボタン・移動ボタンをそれぞれ横並びの小グループにまとめる */
+.workload-mode-btn { border:none; border-radius:8px; padding:6px 12px; font-size:13px; background:var(--bg); color:var(--text-sub); cursor:pointer; box-shadow:2px 2px 4px var(--shadow-dark), -2px -2px 4px var(--shadow-light); } /* 「タスク数ベース／工数ベース」切替ボタンの基本形。zoom-btnと同じ立体感で統一する */
+.workload-mode-btn.active { color:#fff; background:var(--accent); } /* 選択中の集計モードだけアクセント色で塗り、現在どちらのモードかを分かりやすくする */
+.workload-threshold-label { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-sub); } /* 「閾値」「Y軸上限」ラベルと数値入力欄を1行にまとめる */
+.workload-threshold-label input { width:70px; border:none; border-radius:8px; padding:6px 8px; background:var(--bg); box-shadow:inset 2px 2px 4px var(--shadow-dark), inset -2px -2px 4px var(--shadow-light); } /* 数値入力欄は短い数値のみ入れれば良いため幅を狭く固定する */
+
+/* チャート部分は内容量に応じた高さのまま伸び縮みしないようflex-shrink:0を追加し、下の一覧エリア(workload-list-wrapper)にだけ残りの高さを使わせるようにした */
+.workload-chart-wrapper { border-radius:10px; margin-bottom:20px; flex-shrink:0; }
+.workload-chart-outer { display:flex; align-items:stretch; } /* Y軸ラベル部分とスクロール可能なチャート本体を横並びにし、高さを揃える */
+.workload-y-axis { flex-shrink:0; width:34px; position:relative; min-height:270px; border-right:1px solid rgba(0,0,0,0.12); } /* Y軸目盛りを表示する固定幅の帯。目盛りテキストを絶対配置するためrelativeにする */
+.workload-axis-tick { position:absolute; right:6px; font-size:10px; color:var(--text-sub); transform:translateY(50%); white-space:nowrap; } /* Y軸上の各目盛り数値。対応する高さの位置に右寄せで配置する */
+.workload-scroll-pane { overflow-x:auto; flex:1; min-width:0; } /* チャート本体を横スクロール可能にし、Y軸を除いた残り幅をすべて使う */
+.workload-chart { display:flex; align-items:flex-end; gap:2px; padding:8px 8px 0; min-height:270px; position:relative; width:max-content; } /* width:max-content追加：列の合計幅ぶんだけに縮め、親の可視幅までストレッチしないようにする（これによりグリッド線・閾値線・右端境目線が実データの右端で正しく終わるようになる） */
+.workload-grid-line { position:absolute; left:0; right:0; border-top:1px solid rgba(0,0,0,0.08); pointer-events:none; } /* Y軸の目盛りに対応する高さに引く薄い横方向の補助線 */
+.workload-grid-line.zero-line { border-top:1px solid rgba(0,0,0,0.18); } /* 0の位置（基準線）だけは他の目盛り線よりやや濃くして基準の高さを分かりやすくする */
+.workload-threshold-line { position:absolute; left:0; right:0; border-top:2px dashed rgba(224,87,79,0.85); pointer-events:none; z-index:1; } /* 設定した閾値の高さに引く赤い破線。バーより手前(z-index)に表示してアラート境界を常に確認できるようにする */
+.workload-day-col { display:flex; flex-direction:column; align-items:center; flex-shrink:0; cursor:pointer; } /* 日ごとの1列。バー・日番号・曜日を縦に並べ、クリックでその日に絞り込めることを示すカーソルにする */
+.workload-bar-track { position:relative; width:100%; height:200px; } /* バーを積み上げて描画するための土台。閾値超過分と通常分を絶対配置で重ねるためrelativeにする */
+.workload-bar-normal { position:absolute; left:50%; bottom:0; transform:translateX(-50%); width:70%; background:var(--accent); transition:height .15s ease; } /* 閾値以下の通常分のバー。下端を基準に高さが伸び縮みし、変化がなめらかになるようtransitionを付ける */
+.workload-bar-over { position:absolute; left:50%; transform:translateX(-50%); width:70%; background:linear-gradient(180deg, #e0574f, #c23b3b); transition:height .15s ease, bottom .15s ease; } /* 閾値を超えた分だけ通常バーの上に重ねる赤系グラデーションのアラートバー */
+.workload-bar-normal.is-top, .workload-bar-over { border-radius:4px 4px 0 0; } /* バーの一番上に来る部分だけ上端を角丸にし、棒グラフらしい見た目にする */
+.workload-day-col.today-col .workload-bar-track { background: rgba(219,230,255,0.6); border-radius:4px; } /* 「今日」の列はバー土台自体にも薄い強調色を敷き、他の日と区別できるようにする */
+.workload-day-col.selected .workload-bar-normal, .workload-day-col.selected .workload-bar-over { outline:2px solid var(--text-main); outline-offset:1px; } /* クリックして選択中の日のバーには枠線を付け、どの日が選択されているか分かるようにする */
+.workload-day-number { font-size:11px; color:var(--text-main); margin-top:4px; } /* バーの下に表示する日番号（1〜31）の見た目 */
+.workload-day-weekday { font-size:10px; color:var(--text-sub); padding:0 3px; border-radius:3px; } /* 日番号のさらに下に表示する曜日文字の見た目 */
+.workload-day-weekday.weekend { background: var(--weekend-col-header); } /* 曜日文字のうち土日に該当する列には薄紫色の背景を敷く */
+.workload-day-weekday.sat-text { color:var(--sat-text-col); } /* 曜日文字のうち土曜日だけ青文字にする */
+.workload-day-weekday.sun-text { color:var(--sun-text-col); } /* 曜日文字のうち日曜日だけ赤文字にする */
+.workload-day-col.today-col .workload-day-number, .workload-day-col.today-col .workload-day-weekday { font-weight:bold; } /* 「今日」の列は日番号・曜日文字を太字にしてさらに強調する */
+
+.workload-day-boundary { position:absolute; top:0; bottom:0; width:0; border-left:1px dashed rgba(0,0,0,0.15); pointer-events:none; } /* チャート内で日と日の境目を示す薄い縦の破線 */
+.workload-day-boundary.month-end { border-left:2px solid var(--month-line); } /* 月が変わる境目の日境界線だけは、ガントチャートと同じ月区切り色の太い実線にする */
+
+/* workload-list-wrapperをflexboxの縦レイアウトに変更し、チャート部分を除いた残りの高さをすべて使い切るようにした。内部の見出しと本体スクロール部分を分離するための土台にする */
+.workload-list-wrapper {
+  background: var(--surface); /* 背景色を維持する */
+  border-radius: 14px; /* 角丸を維持する */
+  padding: 16px; /* 内側の余白を維持する */
+  box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light); /* 立体感の影を維持する */
+  flex: 1 1 auto; /* チャート部分を除いた残りの高さをすべて使い切る */
+  min-height: 0; /* 内容量に関わらず正しく縮小できるようにする */
+  display: flex; /* 見出し部分とスクロール部分を縦に並べる */
+  flex-direction: column; /* 配置方向を縦にする */
+  overflow: hidden; /* このラッパー自体はスクロールさせず、内部のlist-scroll-areaだけにスクロールを閉じ込める */
+}
+/* 見出し部分の高さが縮まないようflex-shrink:0を追加した（親がflex縦レイアウトになったため） */
+.workload-list-header { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-shrink:0; }
+.workload-list-title { font-size:14px; color:var(--text-main); margin:0; } /* 「タスク一覧（表示期間内）」等の見出し文字の見た目 */
+.workload-clear-select-btn { flex-shrink:0; } /* 日付選択時のみ表示される「選択解除」ボタンが、見出し文字の伸縮に押されて縮まないようにする */
+/*-------------------------------------------------------------------------------------------------------------------------------
+業務余力（ツールバー・積み上げ棒グラフ・Y軸・閾値ライン・下部一覧を含む）
+-------------------------------------------------------------------------------------------------------------------------------*/
+
+
+/*-------------------------------------------------------------------------------------------------------------------------------
+先行開発（未使用クラス）
+-------------------------------------------------------------------------------------------------------------------------------*/
+/* .file-status : HTML側の実際の要素は id="fileStatus" class="app-title" のみで、このクラス自体はどの要素にも付与されていない */
+.file-status { font-size:12px; color:var(--text-sub); }
+
+/* .milestone-form : renderMilestoneList等のマイルストーン関連描画コードにこのクラス名は登場しない */
+.milestone-form { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
+.milestone-form label { flex:1 1 140px; margin-bottom:0; }
+
+/* .structure-modal-box / .structure-columns / .structure-col : 階層構造説明を独立モーダルにしていた旧仕様の名残と推測される。現在はヘルプモーダル内の.help-sectionに統合済み */
+.structure-modal-box { max-width:760px; }
+.structure-columns { display:flex; gap:16px; flex-wrap:wrap; }
+.structure-col { flex:1 1 300px; }
+.structure-col h3 { font-size:13px; color:var(--text-sub); margin:0 0 6px; }
+
+/* .badge-gantt-only : renderRowLabelでは同等機能を row-ganttonly-tag という別名で実装済み。命名変更後の残骸と推測される */
+.badge-gantt-only { font-size:10px; color:#fff; background:var(--accent); border-radius:4px; padding:1px 5px; margin-left:6px; }
+
+/* .badge-closed : renderRowLabelでは同等機能を row-closed-tag という別名で実装済み。命名変更後の残骸と推測される */
+.badge-closed { font-size:10px; color:#fff; background:var(--text-sub); border-radius:4px; padding:1px 5px; margin-left:6px; }
+/*-------------------------------------------------------------------------------------------------------------------------------
+先行開発（未使用クラス）
+-------------------------------------------------------------------------------------------------------------------------------*/
