@@ -1,4 +1,4 @@
-# TMS（Task Management System）／タスク管理システム
+# TMS(Task Management System)/タスク管理システム
 
 > **本ソフトウェアは独自ライセンス（[LICENSE](./LICENSE)）のもとで公開しています。**
 > 商用利用は許可していますが、改変・再配布には制限があります。**ご利用前に必ず [LICENSE](./LICENSE) の全文をお読みください。**
