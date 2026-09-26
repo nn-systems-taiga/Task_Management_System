@@ -1,0 +1,408 @@
+﻿/* 全要素のボックスサイズをborder-box基準に統一する */
+* { box-sizing: border-box; }
+
+/* ここを追加：ページ自体（html/body）のスクロールを止め、内部の各エリアだけがスクロールするようにするための土台設定 */
+html { height: 100%; } /* bodyのheight:100%を効かせるためにhtmlにも高さを与える */
+
+/* :root内の変数定義：土日の色をヘッダー用と本体用の2種類に分離し、曜日テキスト用の色も追加する */
+:root {
+  --bg:#e6ebf2; --surface:#eef2f7; --shadow-dark:rgba(163,177,198,0.55); --shadow-light:rgba(255,255,255,0.85);
+  --text-main:#3a4356; --text-sub:#7c8698; --accent:#5b7fdb; --danger:#e07a7a;
+  --pri-high:#f28b82; --pri-mid:#f5c26b; --pri-low:#7fc99b;
+  --today-col:#dbe6ff; /* 「今日」の強調色はヘッダー・本体とも変更せず維持する */
+  --weekend-col-header: #f3f0fa; /* 土日の色はヘッダーの日付・曜日部分に残す薄紫色 */
+  --weekend-col-body: rgba(0,0,0,0.075); /* 本体（タスクバーが並ぶ行）側は無彩色のグレーにし、縞模様(0.035)より少し濃くして土日を見分けられるようにする */
+  --month-line:rgba(60,70,90,0.35); --year-line:rgba(30,40,60,0.65);
+  --sat-text-col:#2f6fd6; /* 曜日ラベル行で土曜日の文字に使う青色 */
+  --sun-text-col:#e0574f; /* 曜日ラベル行で日曜日の文字に使う赤色 */
+}
+/* ここを修正：margin:0はそのまま維持しつつ、height:100%とoverflow:hiddenを追加した。これにより「ページ自体のスクロール」が発生しなくなり、内部の専用スクロール領域だけでスクロールが完結するようになる */
+body {
+  font-family:"Segoe UI","Hiragino Kaku Gothic ProN","Meiryo",sans-serif; /* フォント指定を維持する */
+  background:var(--bg); /* 背景色を維持する */
+  margin:0; /* デフォルトの外側マージンを消す */
+  color:var(--text-main); /* 文字色を維持する */
+  height: 100%; /* ビューポート全体の高さを確保し、直下の.appがheight:100vhで正しく機能するようにする */
+  overflow: hidden; /* ページ全体（bodyレベル）のスクロールを禁止する */
+}
+/* ここを修正：.appをflexboxの縦レイアウトに変更し、ビューポート高さ(100vh)に固定した。ページ自体はスクロールせず、内部の表示エリアだけが残り高さを使ってスクロールするようにする */
+.app {
+  max-width: 1800px; /* 中身が広がりすぎないよう最大幅を維持する */
+  width: 97%; /* 画面幅に対する比率を維持する */
+  margin: 0 auto; /* 左右中央寄せを維持する */
+  height: 100vh; /* ビューポート全体の高さぶんを確保する */
+  display: flex; /* ヘッダー・タブ行・表示エリアを縦に並べる */
+  flex-direction: column; /* 配置方向を縦にする */
+  padding: 16px 16px 12px; /* ページスクロールが無くなったため下側の大きな余白(旧60px)を減らした */
+  box-sizing: border-box; /* paddingを含めてheight:100vh内に収める */
+  overflow: hidden; /* .app自体はスクロールさせず、内部の各エリアだけにスクロールを閉じ込める */
+}
+/* ここを修正：.appがページ全体スクロールをやめて高さ固定(flexレイアウト)になったため、ヘッダーをposition:stickyで追従させる必要がなくなり、position/top/z-indexの指定を削除した。代わりにflex-shrink:0で高さを固定した */
+.app-header {
+  display: flex; /* タイトルとツールバーを縦に並べる */
+  flex-direction: column; /* 配置方向を維持する */
+  align-items: flex-start; /* 左揃えを維持する */
+  gap: 16px; /* 要素間の間隔を維持する */
+  margin-bottom: 16px; /* 下の要素との間隔を維持する */
+  flex-shrink: 0; /* .appのflexレイアウト内でヘッダーの高さが縮まないよう固定する */
+  background: var(--bg); /* 背景色を維持する */
+  padding: 12px 8px; /* 内側の余白を維持する */
+  box-shadow: 0 4px 10px rgba(0,0,0,0.06); /* 下との境界を分かりやすくする影を維持する */
+}
+.app-title { font-size:12px; margin:0;}
+.toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; justify-content:flex-start; }
+.file-status { font-size:12px; color:var(--text-sub); }
+.btn { border:none; border-radius:12px; padding:10px 16px; font-size:14px; cursor:pointer; background:var(--surface); color:var(--text-main); box-shadow:6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light); transition:box-shadow .15s ease; }
+.btn:hover { box-shadow:3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light); }
+.btn:active { box-shadow:inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); }
+.btn-primary { background:linear-gradient(135deg,var(--accent),#7d5fdb); color:#fff; }
+.btn-danger { background:var(--danger); color:#fff; }
+.btn-small { padding:6px 10px; font-size:12px; }
+.btn-outline { background:var(--surface); }
+
+/* ここを追加：表示モード切替タブと絞り込み・並び替え・検索エリアを1つの行にまとめる共通コンテナ（絞り込みエリアが占有していた1行分の高さを表示エリアに還元するために新設した） */
+.toolbar-tabs-row {
+  display: flex; /* タブ群と絞り込みエリアを横並びにする */
+  align-items: center; /* 高さの異なる要素を縦方向中央で揃える */
+  justify-content: space-between; /* タブ群を左に、絞り込みエリアを右に配置する */
+  flex-wrap: wrap; /* 画面が狭い場合は折り返して2行になることを許容する */
+  gap: 12px; /* タブ群と絞り込みエリアの間隔 */
+  margin-bottom: 16px; /* 下の表示エリアとの間隔（従来のview-tabsのmargin-bottomをここに引き継ぐ） */
+  flex-shrink: 0; /* .appのflexレイアウト内でこの行の高さを固定する */
+}
+/* ここを修正：margin-bottomを親のtoolbar-tabs-rowに移したため削除し、幅が狭くなっても縮まないようflex-shrink:0を追加した */
+.view-tabs { display:flex; gap:8px; justify-content:flex-start; flex-shrink:0; }
+.tab-btn { border:none; border-radius:10px 10px 0 0; padding:10px 20px; background:var(--surface); color:var(--text-sub); cursor:pointer; box-shadow:3px 3px 6px var(--shadow-dark), -3px -3px 6px var(--shadow-light); }
+.tab-btn.active { color:var(--accent); font-weight:bold; box-shadow:inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light); }
+/* ここを修正：絞り込み・検索エリアが専用の1行を占有していたのをやめ、タブ行の右側に配置するようにしたため、margin-bottomを削除し、paddingを詰めてタブ行と高さを揃え、残り幅を占有するようflexを追加した */
+.filter-section {
+  background: var(--surface); /* 背景色を維持する */
+  border-radius: 14px; /* 角丸を維持する */
+  padding: 8px 14px; /* タブ行と高さを揃えるため上下の余白を詰めた（旧14px→8px） */
+  box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light); /* 立体感の影を維持する */
+  flex: 1 1 auto; /* タブ群の右側に残ったスペースをできるだけ占有する */
+  min-width: 320px; /* 画面が狭い場合でも絞り込み項目が窮屈にならない最低幅を確保する */
+}
+.filter-row { display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:flex-start; }
+.filter-row select, .filter-row input { border:none; border-radius:8px; padding:8px 10px; background:var(--bg); box-shadow:inset 2px 2px 4px var(--shadow-dark), inset -2px -2px 4px var(--shadow-light); }
+
+/* ここを追加：リスト/ガント/業務余力の3つの表示エリアをまとめて囲み、常に画面の残り高さいっぱいまで広げるための新設コンテナ */
+.view-panels-wrapper {
+  flex: 1 1 auto; /* ヘッダー・タブ行を除いた残りの高さをすべて使い切る */
+  min-height: 0; /* 内容量に関わらず正しく縮小できるようにする */
+  display: flex; /* 表示中のビュー（1つだけ）が高さいっぱいに広がるようにする */
+  flex-direction: column; /* 縦方向のレイアウトにする */
+  overflow: hidden; /* このラッパー自体はスクロールさせない */
+}
+/* ここを修正：view-panelをflexboxの縦レイアウトに変更し、view-panels-wrapperの残り高さをすべて使い切るようにした。内部の見出し部分とスクロール部分を分離するための土台にする */
+.view-panel {
+  background: var(--surface); /* 背景色を維持する */
+  border-radius: 14px; /* 角丸を維持する */
+  padding: 16px; /* 内側の余白を維持する */
+  box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light); /* 立体感の影を維持する */
+  flex: 1 1 auto; /* view-panels-wrapperの残り高さをすべて使い切る */
+  min-height: 0; /* flexアイテムが内容量で高さ固定されてしまう既定挙動を解除し、正しく縮小できるようにする */
+  display: flex; /* 内部（ツールバー部分と実際にスクロールする部分）を縦に並べる */
+  flex-direction: column; /* 配置方向を縦にする */
+  overflow: hidden; /* view-panel自体はスクロールさせず、内部の専用スクロール領域だけにスクロールを閉じ込める */
+}
+/* ここを追加：display:flexを指定したことでhidden属性だけでは非表示にならなくなるため、hidden属性が付いている場合は明示的にdisplay:noneで上書きする */
+.view-panel[hidden] { display: none; }
+
+.task-table { width:100%; border-collapse:collapse; }
+.task-table th, .task-table td { padding:10px 8px; text-align:left; border-bottom:2px solid rgba(30,40,60,0.18); font-size:14px; }
+/* ここを追加：リスト表示の見出し行を、ガントチャートの日付見出しと同様にスクロール時も上部に固定表示させる */
+.task-table thead th {
+  position: sticky; /* スクロールしても見出し行が流れていかないように固定する */
+  top: 0; /* 親のスクロール領域(.list-scroll-area)の最上部に固定する */
+  background: var(--surface); /* 下の行が透けて重ならないよう不透明の背景を敷く */
+  z-index: 2; /* タスク行より手前に表示する */
+}
+.task-table tbody tr:nth-child(even) { background: rgba(91,127,219,0.05); }
+
+/* ここを追加：リスト表示・業務余力タスク一覧で、見出し行は固定したまま本体だけを内部スクロールさせるための共通スクロール領域 */
+.list-scroll-area {
+  flex: 1 1 auto; /* 見出しなどを除いた残りの高さをすべて使い切る */
+  min-height: 0; /* 内容量に関わらず正しく縮小できるようにする */
+  overflow-y: auto; /* このエリア内だけで縦スクロールさせる（ページ全体のスクロールとは分離する） */
+}
+
+.empty-message { text-align:center; color:var(--text-sub); padding:20px; }
+.row-kind-badge { font-size:11px; color:var(--text-sub); }
+.row-title { font-size:14px; color:var(--text-main); margin-bottom:2px; }
+.row-path { font-size:11px; color:var(--text-sub); }
+.modal-overlay { position:fixed; inset:0; background:rgba(40,45,60,0.35); display:flex; align-items:center; justify-content:center; z-index:100; }
+.modal-overlay[hidden] { display:none; }
+.modal-box { background:var(--surface); border-radius:16px; padding:24px; width:92%; max-width:520px; max-height:88vh; overflow-y:auto; box-shadow:10px 10px 20px var(--shadow-dark), -10px -10px 20px var(--shadow-light); }
+.modal-box label { display:block; margin-bottom:10px; font-size:13px; color:var(--text-sub); }
+.modal-box input[type="text"], .modal-box input[type="date"], .modal-box input[type="time"], .modal-box input[type="number"], .modal-box textarea, .modal-box select { width:100%; margin-top:4px; border:none; border-radius:8px; padding:8px 10px; background:var(--bg); box-shadow:inset 2px 2px 4px var(--shadow-dark), inset -2px -2px 4px var(--shadow-light); font-size:14px; color:var(--text-main); }
+.form-row { display:flex; gap:12px; flex-wrap:wrap; }
+.form-row label { flex:1; }
+.modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:16px; }
+.error-text { color:var(--danger); font-size:13px; }
+.modal-desc { font-size:13px; color:var(--text-sub); }
+/* ===== 変更後 ===== */
+.periods-block { margin-bottom:12px; }
+.periods-header { display:flex; justify-content:space-between; align-items:center; font-size:13px; color:var(--text-sub); margin-bottom:6px; }
+
+/* ここを追加：計画期間・実績期間の入力行が何件に増えても、モーダル全体がその分だけ縦に伸び続けないよう、行一覧部分だけを固定高さの内部スクロール領域にする */
+#periodsContainer, #actualPeriodsContainer {
+  max-height: 260px; /* 期間行一覧の最大高さ。数値はお好みで調整可能（狭めたい場合は200px程度、広げたい場合は320px程度が目安） */
+  overflow-y: auto; /* 最大高さを超えた分はこの領域内だけで縦スクロールし、モーダル自体のスクロールとは分離する */
+  padding-right: 6px; /* スクロールバーが期間行の内容（特に削除ボタン）に重ならないよう少し余白を設ける */
+}
+
+.period-row { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; padding:8px; border-radius:8px; background:var(--bg); box-shadow:inset 1px 1px 3px var(--shadow-dark), inset -1px -1px 3px var(--shadow-light); }
+.period-row-dates { display:flex; gap:8px; align-items:center; }
+
+/* ここを追加：期間行が複数になっても「今どの期間を編集しているか」を見失わないようにするための番号バッジ（#1・#2…）のスタイル */
+.period-row-index {
+  font-size: 11px; /* 日付欄の文字より小さくし、あくまで補助情報であることを示す */
+  color: var(--text-sub); /* 目立たせすぎないよう控えめな色にする */
+  background: var(--surface); /* 背景色を付けて周囲の日付欄と視覚的に区別する */
+  border-radius: 6px; /* 角丸にしてバッジらしい見た目にする */
+  padding: 2px 6px; /* バッジ内側の余白 */
+  flex-shrink: 0; /* 日付欄が伸びても番号バッジの幅が縮まないようにする */
+  white-space: nowrap; /* 番号が折り返されないようにする */
+}
+.period-row-dates input[type="date"] { flex:1; margin-top:0; }
+.period-row-time { display:flex; gap:8px; align-items:center; font-size:12px; color:var(--text-sub); transition:opacity .15s ease; }
+.period-row-time.is-disabled { opacity:.4; pointer-events:none; }
+.period-row-time input[type="time"] { flex:1; margin-top:0; }
+.period-time-toggle { display:flex; align-items:center; gap:4px; margin:0; white-space:nowrap; }
+.milestone-list { margin-bottom:12px; max-height:160px; overflow-y:auto; }
+.milestone-item { display:flex; align-items:center; gap:8px; padding:6px 4px; border-bottom:1px solid rgba(0,0,0,0.06); font-size:13px; }
+.milestone-item .m-shape { font-size:16px; }
+.milestone-item .m-label { flex:1; }
+.milestone-form { display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
+.milestone-form label { flex:1 1 140px; margin-bottom:0; }
+.file-actions { display:flex; flex-wrap:wrap; gap:10px; margin:14px 0; }
+.file-import-label { display:inline-flex; align-items:center; cursor:pointer; }
+.help-modal-box { max-width:640px; }
+.help-content { margin-bottom:8px; }
+.help-section { margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid rgba(0,0,0,0.08); }
+.help-section:last-child { margin-bottom:0; border-bottom:none; }
+.help-section h3 { margin:0 0 8px; font-size:14px; color:var(--accent); }
+/* ここを修正：チップ風の背景・角丸・三角マークをやめ、h3と同じアクセントカラーの文字色のみで見出しを表現するシンプルな形にした。本文(13px)とのサイズ差も最小限にし、急な文字変化による読みづらさを避ける */
+.help-section h4 {
+  margin: 14px 0 4px; /* 前の段落との間隔をやや広めに、直後の本文との間隔は詰める */
+  font-size: 13px; /* 本文と同じサイズにし、太字と色だけで見出しであることを示す（サイズ差による急な変化を無くす） */
+  font-weight: 700; /* 太字にして本文と区別する */
+  color: var(--accent); /* h3と同じアクセントカラーに揃え、見出し同士の色に一貫性を持たせる */
+}
+/* ここを追加：見出しの先頭に「・」を付けて視覚的な目印にする（背景やインデントは付けない） */
+.help-section h4::before {
+  content: '・'; /* 見出し文字列の直前に「・」を1文字追加する */
+}
+/* ここを修正：各help-section内で最初に来るh4はh3の直後に来るため、余分な上マージンを詰める（変更前と同じ役割を維持） */
+.help-section h4:first-of-type { margin-top: 0; }
+/* ここを修正：1つのhelp-section内に複数のp(段落)が並ぶようになったため、段落間の間隔を確保するmargin-bottomを追加した */
+.help-section p { margin:0 0 8px; font-size:13px; color:var(--text-main); line-height:1.7; }
+/* ここを追加：section内最後の段落は下の区切り線(border-bottom)との間隔をこれ以上広げたくないため、余分な下マージンを削除する */
+.help-section p:last-child { margin-bottom:0; }
+
+.structure-modal-box { max-width:760px; }
+.structure-columns { display:flex; gap:16px; flex-wrap:wrap; }
+.structure-col { flex:1 1 300px; }
+.structure-col h3 { font-size:13px; color:var(--text-sub); margin:0 0 6px; }
+
+/* ここを修正：ガントセクション内でツールバー部分の高さが縮まないようflex-shrink:0を追加した（.gantt-sectionが.view-panelのflex縦レイアウトになったため） */
+.gantt-toolbar { display:flex; flex-wrap:wrap; justify-content:flex-start; align-items:center; gap:16px; margin-bottom:12px; flex-shrink:0; }
+.gantt-zoom-group, .gantt-nav-group, .gantt-legend { display:flex; gap:6px; align-items:center; }
+.zoom-btn { border:none; border-radius:8px; padding:6px 12px; font-size:13px; background:var(--bg); color:var(--text-sub); cursor:pointer; box-shadow:2px 2px 4px var(--shadow-dark), -2px -2px 4px var(--shadow-light); }
+.zoom-btn.active { color:#fff; background:var(--accent); }
+.legend-item { font-size:12px; color:var(--text-sub); display:flex; align-items:center; gap:4px; }
+.legend-dot { display:inline-block; width:10px; height:10px; border-radius:50%; }
+.dot-高 { background:var(--pri-high); }
+.dot-中 { background:var(--pri-mid); }
+.dot-低 { background:var(--pri-low); }
+.linked-shift-toggle { display:flex; align-items:center; gap:4px; font-size:12px; color:var(--text-sub); margin-left:4px; }
+
+/* ここを修正：max-height:70vhによる固定値をやめ、flex:1で親(.gantt-section)の残り高さいっぱいまで広がるようにした。これにより「ページ全体のスクロール」と「ガント内部のスクロール」が二重に発生していた問題を解消し、スクロールはこの要素だけで完結するようにした */
+.gantt-wrapper {
+  display: flex; /* ラベルペインとスクロールペインを横に並べる */
+  align-items: stretch; /* 変更点：flex-startだと子要素の高さが中身依存になり縦スクロールが成立しないため、stretchにして両ペインの高さをwrapperに揃える */
+  overflow: hidden; /* 変更点：縦スクロールはこのラッパーではなく内側の.gantt-scroll-paneが担当するため、ここでは何も出さない */
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: 10px;
+}
+.gantt-label-pane {
+  flex-shrink: 0; /* 横方向に縮まないよう固定する */
+  width: 200px; /* JS側の定数(GANTT_LABEL_WIDTH_PX)と一致させるタスク名列の幅 */
+  background: var(--surface);
+  border-right: 2px solid rgba(0,0,0,0.12);
+  overflow-y: hidden; /* 追加：見た目上は縦にはみ出す中身を隠す。実際の縦位置合わせはJSでscrollTopを同期させて行う */
+  scrollbar-width: none; /* 追加：Firefoxでラベルペイン側に二重のスクロールバーが出ないようにする */
+}
+.gantt-label-pane::-webkit-scrollbar { display: none; } /* 追加：Chrome/Safari等でラベルペイン側の見た目上のスクロールバーを消す（実スクロールはJS同期で行うため不要） */
+.gantt-scroll-pane {
+  flex: 1 1 auto; /* 残りの横幅をすべて使う */
+  overflow: auto; /* 変更点：横だけでなく縦もこのペイン自身が担当するスクロールコンテナにする。これによりsticky指定が正しくこの要素基準で機能するようになる */
+  min-width: 0; /* flexアイテムが正しく縮小できるようにする */
+  min-height: 0; /* 追加：flexアイテムとして正しく縮小し、overflow:autoが効くようにする */
+}
+
+.gantt-grid { display:grid; position:relative; }
+
+/* ラベルペイン内でも縦スクロール時にこの見出しだけ上部固定させたいため、top方向のstickyのみ維持する。left方向は元々不要なので削除した */
+.gantt-head-label { position: sticky; top:0; background:var(--surface); padding:6px 8px; font-size:12px; border-right:2px solid rgba(0,0,0,0.12); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; z-index:6; display:flex; align-items:center; gap:4px; }
+
+/* ラベルペイン自体が横スクロールの外にあるため、position:sticky（left方向）もz-index重ね順もwill-changeも不要になった。高さは行ごとにJSがインラインで指定する */
+.gantt-row-label { position:static; background:var(--surface); padding:6px 8px; font-size:12px; border-right:2px solid rgba(0,0,0,0.12); border-bottom:2px solid rgba(30,40,60,0.35); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:flex; align-items:center; gap:4px; }
+
+.gantt-row-label .row-name { overflow:hidden; text-overflow:ellipsis; }
+.toggle-icon-btn { border:none; background:transparent; cursor:pointer; font-size:11px; color:var(--text-sub); padding:0 2px; flex-shrink:0; }
+
+.gantt-head-month { display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--text-sub); border-bottom:1px solid rgba(0,0,0,0.08); border-right:1px solid rgba(0,0,0,0.08); position:sticky; top:0; z-index:5; background:var(--surface); }
+
+.gantt-head-cell { display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--text-sub); border-bottom:1px solid rgba(0,0,0,0.08); border-right:1px solid rgba(0,0,0,0.12); position:sticky; top:0; z-index:5; background:var(--surface); }
+
+.gantt-head-weekday-cell { display:flex; align-items:center; justify-content:center; font-size:10px; color:var(--text-sub); border-bottom:2px solid rgba(0,0,0,0.15); border-right:1px solid rgba(0,0,0,0.12); position:sticky; top:0; z-index:5; background:var(--surface); }
+.gantt-head-weekday-cell.sat-text { color:var(--sat-text-col); }
+.gantt-head-weekday-cell.sun-text { color:var(--sun-text-col); }
+
+.gantt-head-cell.weekend, .gantt-head-weekday-cell.weekend { background: var(--weekend-col-header); }
+
+.gantt-head-cell.today-col, .gantt-head-weekday-cell.today-col { background:var(--today-col); font-weight:bold; }
+.gantt-head-cell.month-end, .gantt-head-month.month-end, .gantt-head-weekday-cell.month-end { border-right:2px solid var(--month-line); }
+.gantt-head-cell.year-end, .gantt-head-month.year-end, .gantt-head-weekday-cell.year-end { border-right:3px solid var(--year-line); }
+
+.gantt-day-cell { border-right:1px solid rgba(0,0,0,0.12); border-bottom:2px solid rgba(30,40,60,0.35); min-height:28px; }
+
+.gantt-day-cell.weekend { background: var(--weekend-col-body); }
+
+.gantt-day-cell.today-col { background:var(--today-col); }
+.gantt-day-cell.month-end { border-right:2px solid var(--month-line); }
+.gantt-day-cell.year-end { border-right:3px solid var(--year-line); }
+.gantt-bar { border-radius:6px; font-size:11px; color:#fff; display:flex; align-items:center; padding:0 6px; white-space:nowrap; overflow:hidden; margin:3px 0; height:22px; border:1px solid rgba(0,0,0,0.18); }
+.gantt-bar.detail-bar { opacity:.9; border-style:dashed; }
+.gantt-bar.pri-高 { background:var(--pri-high); }
+.gantt-bar.pri-中 { background:var(--pri-mid); }
+.gantt-bar.pri-低 { background:var(--pri-low); }
+.gantt-bar.done { opacity:.5; text-decoration:line-through; }
+.gantt-out-of-range { font-size:11px; color:var(--text-sub); padding:4px 8px; }
+.gantt-overall-row { position:relative; height:44px; }
+.gantt-overall-line { position:absolute; top:50%; left:0; right:0; height:2px; background:var(--text-sub); opacity:.4; }
+.milestone-marker { position:absolute; top:50%; transform:translate(-50%,-50%); font-size:16px; line-height:1; text-align:center; }
+.milestone-marker .m-label-text { position:absolute; left:50%; transform:translateX(-50%); font-size:10px; white-space:nowrap; background:var(--surface); padding:1px 4px; border-radius:4px; box-shadow:1px 1px 3px var(--shadow-dark); }
+.milestone-marker.label-top .m-label-text { bottom:18px; }
+.milestone-marker.label-bottom .m-label-text { top:18px; }
+.drag-tooltip { position:fixed; z-index:200; background:#2b3242; color:#fff; padding:4px 8px; border-radius:6px; font-size:12px; pointer-events:none; white-space:nowrap; }
+body.dragging-gantt { user-select:none; }
+body.dragging-gantt .gantt-bar { cursor:grabbing !important; }
+
+.desc-tooltip {
+  position:fixed;
+  z-index:210;
+  background:#2b3242;
+  color:#fff;
+  padding:6px 10px;
+  border-radius:6px;
+  font-size:12px;
+  max-width:260px;
+  white-space:pre-wrap;
+  line-height:1.5;
+  pointer-events:none;
+  box-shadow:3px 3px 8px rgba(0,0,0,0.35);
+}
+.gantt-bar:focus-visible {
+  outline:2px solid var(--accent);
+  outline-offset:1px;
+}
+.gantt-row-label:focus, .gantt-row-label:focus-visible {
+  outline:none;
+}
+.modal-box hr {
+  border:none;
+  border-top:1px solid rgba(0,0,0,0.1);
+  margin:16px 0;
+}
+
+.checkbox-inline-label { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-sub); margin-bottom:10px; }
+.checkbox-inline-label input[type="checkbox"] { width:auto; margin:0; flex-shrink:0; }
+.badge-gantt-only { font-size:10px; color:#fff; background:var(--accent); border-radius:4px; padding:1px 5px; margin-left:6px; }
+.row-ganttonly-tag { font-size:9px; color:#fff; background:var(--accent); border-radius:50%; width:14px; height:14px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; margin-left:2px; }
+
+.gantt-row-label { cursor: grab; }
+.gantt-row-label.dragging-row { opacity: .4; cursor: grabbing; }
+.gantt-row-label.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.gantt-row-label.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.gantt-row-label.drop-into { background: rgba(91,127,219,0.25); outline: 2px dashed var(--accent); outline-offset: -2px; }
+
+.badge-closed { font-size:10px; color:#fff; background:var(--text-sub); border-radius:4px; padding:1px 5px; margin-left:6px; }
+.gantt-row-label.is-closed-row .row-name { text-decoration: line-through; opacity: .55; }
+.row-closed-tag { font-size: 11px; margin-left: 4px; }
+
+.list-modal-box { max-width:720px; display:flex; flex-direction:column; height:82vh; max-height:82vh; overflow:hidden; }
+.list-modal-box .milestone-list { flex:1 1 auto; min-height:0; max-height:none; overflow-y:auto; }
+.list-modal-box h2, .list-modal-box .modal-desc, .list-modal-box .filter-row, .list-modal-box .file-actions, .list-modal-box .modal-actions { flex-shrink:0; }
+.list-modal-box .filter-row { margin-bottom:10px; }
+
+.actual-periods-block { margin-top: 4px; }
+.actual-periods-desc { font-size:12px; color:var(--text-sub); margin:2px 0 8px; }
+.actual-periods-block .period-row { background: rgba(91,127,219,0.08); }
+
+.gantt-task-lane { position:relative; height:48px; }
+.gantt-task-lane::after { content:''; position:absolute; left:0; right:0; top:50%; height:0; border-top:1px dashed rgba(0,0,0,0.3); }
+
+.gantt-bar.track-actual { opacity:.85; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.3); }
+.gantt-bar.track-actual::before { content:'✓ '; }
+
+.task-table td.col-period { white-space: nowrap; }
+
+.gantt-row-alt { background: rgba(0,0,0,0.035); }
+
+.gantt-row-label.gantt-row-alt { background: #e0e3e8; }
+
+/* ここを修正：業務余力セクション内でツールバー部分の高さが縮まないようflex-shrink:0を追加した（.workload-sectionが.view-panelのflex縦レイアウトになったため） */
+.workload-toolbar { display:flex; flex-wrap:wrap; justify-content:flex-start; align-items:center; gap:16px; margin-bottom:12px; flex-shrink:0; }
+.workload-mode-group, .workload-zoom-group, .workload-nav-group { display:flex; gap:6px; align-items:center; }
+.workload-mode-btn { border:none; border-radius:8px; padding:6px 12px; font-size:13px; background:var(--bg); color:var(--text-sub); cursor:pointer; box-shadow:2px 2px 4px var(--shadow-dark), -2px -2px 4px var(--shadow-light); }
+.workload-mode-btn.active { color:#fff; background:var(--accent); }
+.workload-threshold-label { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-sub); }
+.workload-threshold-label input { width:70px; border:none; border-radius:8px; padding:6px 8px; background:var(--bg); box-shadow:inset 2px 2px 4px var(--shadow-dark), inset -2px -2px 4px var(--shadow-light); }
+
+/* ここを修正：チャート部分は内容量に応じた高さのまま伸び縮みしないようflex-shrink:0を追加し、下の一覧エリア(workload-list-wrapper)にだけ残りの高さを使わせるようにした */
+.workload-chart-wrapper { border-radius:10px; margin-bottom:20px; flex-shrink:0; }
+.workload-chart-outer { display:flex; align-items:stretch; }
+.workload-y-axis { flex-shrink:0; width:34px; position:relative; min-height:270px; border-right:1px solid rgba(0,0,0,0.12); }
+.workload-axis-tick { position:absolute; right:6px; font-size:10px; color:var(--text-sub); transform:translateY(50%); white-space:nowrap; }
+.workload-scroll-pane { overflow-x:auto; flex:1; min-width:0; }
+.workload-chart { display:flex; align-items:flex-end; gap:2px; padding:8px 8px 0; min-height:270px; position:relative; width:max-content; } /* width:max-content追加：列の合計幅ぶんだけに縮め、親の可視幅までストレッチしないようにする（これによりグリッド線・閾値線・右端境目線が実データの右端で正しく終わるようになる） */
+.workload-grid-line { position:absolute; left:0; right:0; border-top:1px solid rgba(0,0,0,0.08); pointer-events:none; }
+.workload-grid-line.zero-line { border-top:1px solid rgba(0,0,0,0.18); }
+.workload-threshold-line { position:absolute; left:0; right:0; border-top:2px dashed rgba(224,87,79,0.85); pointer-events:none; z-index:1; }
+.workload-day-col { display:flex; flex-direction:column; align-items:center; flex-shrink:0; cursor:pointer; }
+.workload-bar-track { position:relative; width:100%; height:200px; }
+.workload-bar-normal { position:absolute; left:50%; bottom:0; transform:translateX(-50%); width:70%; background:var(--accent); transition:height .15s ease; }
+.workload-bar-over { position:absolute; left:50%; transform:translateX(-50%); width:70%; background:linear-gradient(180deg, #e0574f, #c23b3b); transition:height .15s ease, bottom .15s ease; }
+.workload-bar-normal.is-top, .workload-bar-over { border-radius:4px 4px 0 0; }
+.workload-day-col.today-col .workload-bar-track { background: rgba(219,230,255,0.6); border-radius:4px; }
+.workload-day-col.selected .workload-bar-normal, .workload-day-col.selected .workload-bar-over { outline:2px solid var(--text-main); outline-offset:1px; }
+.workload-day-number { font-size:11px; color:var(--text-main); margin-top:4px; }
+.workload-day-weekday { font-size:10px; color:var(--text-sub); padding:0 3px; border-radius:3px; }
+.workload-day-weekday.weekend { background: var(--weekend-col-header); }
+.workload-day-weekday.sat-text { color:var(--sat-text-col); }
+.workload-day-weekday.sun-text { color:var(--sun-text-col); }
+.workload-day-col.today-col .workload-day-number, .workload-day-col.today-col .workload-day-weekday { font-weight:bold; }
+
+.workload-day-boundary { position:absolute; top:0; bottom:0; width:0; border-left:1px dashed rgba(0,0,0,0.15); pointer-events:none; }
+.workload-day-boundary.month-end { border-left:2px solid var(--month-line); }
+
+/* ここを修正：workload-list-wrapperをflexboxの縦レイアウトに変更し、チャート部分を除いた残りの高さをすべて使い切るようにした。内部の見出しと本体スクロール部分を分離するための土台にする */
+.workload-list-wrapper {
+  background: var(--surface); /* 背景色を維持する */
+  border-radius: 14px; /* 角丸を維持する */
+  padding: 16px; /* 内側の余白を維持する */
+  box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light); /* 立体感の影を維持する */
+  flex: 1 1 auto; /* チャート部分を除いた残りの高さをすべて使い切る */
+  min-height: 0; /* 内容量に関わらず正しく縮小できるようにする */
+  display: flex; /* 見出し部分とスクロール部分を縦に並べる */
+  flex-direction: column; /* 配置方向を縦にする */
+  overflow: hidden; /* このラッパー自体はスクロールさせず、内部のlist-scroll-areaだけにスクロールを閉じ込める */
+}
+/* ここを修正：見出し部分の高さが縮まないようflex-shrink:0を追加した（親がflex縦レイアウトになったため） */
+.workload-list-header { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-shrink:0; }
+.workload-list-title { font-size:14px; color:var(--text-main); margin:0; }
+.workload-clear-select-btn { flex-shrink:0; }
